@@ -71,17 +71,17 @@ pub(crate) struct OpenLog {
     order_id: String,
     size: Decimal,
     price: Decimal,
-    bid: BidOrAsk,
+    bid_or_ask: BidOrAsk,
 }
 
 impl OpenLog {
-    pub(crate) fn new(sequence: i64, pair: String, order_id: String, size: Decimal, price: Decimal, bid: BidOrAsk) -> Self {
+    pub(crate) fn new(sequence: i64, pair: String, order_id: String, size: Decimal, price: Decimal, bid_or_ask: BidOrAsk) -> Self {
         OpenLog {
             base: Base::new(LogType::Open, sequence, pair, SystemTime::now()),
             order_id,
             size,
             price,
-            bid,
+            bid_or_ask,
         }
     }
 }
@@ -100,18 +100,18 @@ pub(crate) struct DoneLog {
     price: Decimal,
     remaining_size: Decimal,
     reason: String,
-    bid: BidOrAsk,
+    bid_or_ask: BidOrAsk,
 }
 
 impl DoneLog {
-    pub(crate) fn new(sequence: i64, pair: String, order_id: String, price: Decimal, remaining_size: Decimal, reason: String, bid: BidOrAsk) -> Self {
+    pub(crate) fn new(sequence: i64, pair: String, order_id: String, price: Decimal, remaining_size: Decimal, reason: String, bid_or_ask: BidOrAsk) -> Self {
         DoneLog {
             base: Base::new(LogType::Done, sequence, pair, SystemTime::now()),
             order_id,
             price,
             remaining_size,
             reason,
-            bid,
+            bid_or_ask,
         }
     }
 }

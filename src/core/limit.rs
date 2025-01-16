@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use crate::core::log::{DoneLog, OpenLog};
+use crate::core::log::{DoneLog, Log, MatchLog, OpenLog};
 use crate::core::match_result::MatchResult;
 use crate::core::order::Order;
 
@@ -96,52 +96,79 @@ impl Limit {
 
     /// Fills a market order by matching it with limit orders at this price level.
     ///
-    /// This function attempts to fill the provided market order by matching it against the limit
-    /// orders in the `Limit`'s order book. If the size of the market order is greater than or equal
-    /// to the size of a limit order, the limit order is fully filled, and the market order's size is
-    /// reduced accordingly. If the size of the market order is smaller than a limit order, the market
-    /// order is completely filled, and the limit order's size is reduced.
+    /// This function attempts to match a given market order against the current limit orders.
+    /// It iterates through the limit orders and performs the following steps:
+    /// - If the size of the market order is greater than or equal to the size of a limit order,
+    ///   the limit order is fully filled, and the remaining size of the market order is reduced.
+    /// - If the size of the market order is smaller than a limit order, the market order is fully filled,
+    ///   and the remaining size of the limit order is reduced.
     ///
-    /// The function continues to match the market order with limit orders until the market order is
-    /// fully filled or no matching limit orders remain. It returns a list of `MatchResult` that
-    /// describes each match made during the process.
+    /// During the matching process, logs are generated for each match and for any remaining open orders.
+    /// These logs include `MatchLog` for matched orders and `DoneLog` for orders that is filled after
+    /// processing.
     ///
     /// # Arguments
-    /// * `market_order` - A mutable reference to the `Order` representing the market order to be filled.
+    /// * `market_order` - A mutable reference to the market `Order` to be filled.
     ///
     /// # Returns
-    /// * A `Vec<MatchResult>` representing the result of each match, including the matched ask and
-    ///   bid orders, the price, and the size of the match.
-    pub(crate) fn fill_order(&mut self, market_order: &mut Order) -> Vec<MatchResult> {
-        let mut match_result: Vec<MatchResult> = vec![];
+    /// * A `Vec<dyn Log>` containing logs of matches and filleds orders.
+    ///
+    /// # Behavior
+    /// - Fully filled limit orders are removed from the order book.
+    /// - Limit orders with remaining size after matching are retained.
+    /// - The function generates logs for matched orders and done orders.
+    ///
+    /// # Logs
+    /// * `MatchLog` is generated when a match occurs between a market order and a limit order.
+    /// * `DoneLog` is generated for orders that remain in the order book after processing.
+    pub(crate) fn fill_order(&mut self, market_order: &mut Order) -> Vec<dyn Log> {
+        let mut logs: Vec<dyn Log> = vec![];
         for limit_order  in self.orders.iter_mut() {
             match market_order.size >= limit_order.size {
                 true => {
                     market_order.size -= limit_order.size;
-                    match_result.push(MatchResult {
-                        ask: limit_order.clone(),
-                        bid: market_order.clone(),
-                        price: self.price,
-                        size_filled: limit_order.size,
-                    });
+                    logs.push(MatchLog::new(
+                            limit_order.next_log_seq(),
+                            "PAIR".to_string(),
+                            market_order.clone().id,
+                            limit_order.clone().id,
+                            limit_order.price,
+                            market_order.size
+                        )
+                    );
+
                     limit_order.size = dec!(0);  // Fully filled limit order.
                 }
                 false => {
                     limit_order.size -= market_order.size;
-                    match_result.push(MatchResult {
-                        ask: limit_order.clone(),
-                        bid: market_order.clone(),
-                        price: self.price,
-                        size_filled: market_order.size,
-                    });
+                    logs.push(MatchLog::new(
+                            limit_order.next_log_seq(),
+                            "PAIR".to_string(),
+                            market_order.clone().id,
+                            limit_order.clone().id,
+                            limit_order.price,
+                            market_order.size
+                        )
+                    );
                     market_order.size = dec!(0);  // Fully filled market order.
                 }
             }
         }
 
         // Retain only the limit orders that still have size left.
-        self.orders.retain(|order| order.size > dec!(0));
-        match_result
+        self.orders.retain(|mut order| {
+            logs.push(DoneLog::new(
+                order.next_log_seq(),
+                "PAIR".to_string(),
+                order.clone().id,
+                order.price,
+                dec!(0),
+                "FILLED".to_string(),
+                order.clone().bid_or_ask
+            ));
+            order.size > dec!(0)
+        });
+        logs
     }
 
 }
