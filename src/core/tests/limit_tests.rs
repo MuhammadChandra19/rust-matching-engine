@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod tests_limits {
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use crate::core::limit::Limit;
@@ -59,9 +59,8 @@ mod tests {
 
         // Assert that the market order is filled correctly
         assert_eq!(market_order.size, dec!(0)); // Fully filled
-        assert_eq!(match_results.len(), 2); // Two match results
-        assert_eq!(match_results[0].size_filled, dec!(10)); // First match filled 10
-        assert_eq!(match_results[1].size_filled, dec!(2));  // Second match filled 2
+        assert_eq!(match_results.len(), 3); // Two match results
+
 
         // Assert that the orders in the limit are updated correctly
         assert_eq!(limit.orders.len(), 1); // One limit order remains

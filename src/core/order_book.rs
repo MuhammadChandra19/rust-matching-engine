@@ -8,8 +8,8 @@ use crate::core::order::{BidOrAsk, Order};
 /// The `OrderBook` struct manages buy and sell orders, organized by price levels.
 #[derive(Debug)]
 pub struct OrderBook {
-    asks: HashMap<Decimal, Limit>, // Map of price levels to ask (sell) limits.
-    bids: HashMap<Decimal, Limit>, // Map of price levels to bid (buy) limits.
+    pub(crate) asks: HashMap<Decimal, Limit>, // Map of price levels to ask (sell) limits.
+    pub(crate) bids: HashMap<Decimal, Limit>, // Map of price levels to bid (buy) limits.
 }
 
 impl OrderBook {
@@ -38,18 +38,25 @@ impl OrderBook {
             BidOrAsk::Ask => self.bid_limits(), // Asks consume bids.
         };
 
+        // Collect indices of limits to remove
+        let mut remove_indices = Vec::new();
         for (index, limit_order) in limits.iter_mut().enumerate() {
             let result = limit_order.fill_order(market_order);
+
+            if limit_order.orders.is_empty() {
+                remove_indices.push(index);
+            }
+
+            logs.extend(result); // Collect logs for matches and open orders.
 
             if market_order.is_filled() {
                 break; // Stop once the market order is completely filled.
             }
+        }
 
-            if limit_order.orders.is_empty() {
-                limits.remove(index); // Remove limits with no remaining orders.
-            }
-
-            logs.extend(result); // Collect logs for matches and open orders.
+        // Remove the limits after the iteration
+        for index in remove_indices.iter().rev() {
+            limits.remove(*index);
         }
 
         logs

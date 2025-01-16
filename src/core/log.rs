@@ -68,7 +68,7 @@ impl Log for ReceivedLog {
 #[derive(Debug)]
 pub(crate) struct OpenLog {
     base: Base,
-    order_id: String,
+    pub(crate) order_id: String,
     size: Decimal,
     price: Decimal,
     bid_or_ask: BidOrAsk,
