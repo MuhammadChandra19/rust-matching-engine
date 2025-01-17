@@ -103,7 +103,6 @@ impl OrderBook {
     pub fn add_limit_order(&mut self, price: Decimal, mut order: Order) -> OpenLog {
         let log = OpenLog::new(
             order.next_log_seq(),
-            "PAIR".to_string(),
             order.id.clone(),
             order.size,
             price,

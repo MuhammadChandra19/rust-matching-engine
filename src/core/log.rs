@@ -21,16 +21,14 @@ pub(crate) trait Log {
 struct Base {
     log_type: LogType,
     sequence: i64,
-    pair: String,
     time: SystemTime,
 }
 
 impl Base {
-    fn new(log_type: LogType, sequence: i64, pair: String, time: SystemTime) -> Self {
+    fn new(log_type: LogType, sequence: i64, time: SystemTime) -> Self {
         Base {
             log_type,
             sequence,
-            pair,
             time,
         }
     }
@@ -47,9 +45,9 @@ struct ReceivedLog {
 }
 
 impl ReceivedLog {
-    fn new(sequence: i64, pair: String, order_id: String, size: f64, price: f64, order_type: i64) -> Self {
+    fn new(sequence: i64, order_id: String, size: f64, price: f64, order_type: i64) -> Self {
         ReceivedLog {
-            base: Base::new(LogType::Done, sequence, pair, SystemTime::now()),
+            base: Base::new(LogType::Done, sequence, SystemTime::now()),
             order_id,
             size,
             price,
@@ -75,9 +73,9 @@ pub(crate) struct OpenLog {
 }
 
 impl OpenLog {
-    pub(crate) fn new(sequence: i64, pair: String, order_id: String, size: Decimal, price: Decimal, bid_or_ask: BidOrAsk) -> Self {
+    pub(crate) fn new(sequence: i64, order_id: String, size: Decimal, price: Decimal, bid_or_ask: BidOrAsk) -> Self {
         OpenLog {
-            base: Base::new(LogType::Open, sequence, pair, SystemTime::now()),
+            base: Base::new(LogType::Open, sequence, SystemTime::now()),
             order_id,
             size,
             price,
@@ -104,9 +102,9 @@ pub(crate) struct DoneLog {
 }
 
 impl DoneLog {
-    pub(crate) fn new(sequence: i64, pair: String, order_id: String, price: Decimal, remaining_size: Decimal, reason: String, bid_or_ask: BidOrAsk) -> Self {
+    pub(crate) fn new(sequence: i64, order_id: String, price: Decimal, remaining_size: Decimal, reason: String, bid_or_ask: BidOrAsk) -> Self {
         DoneLog {
-            base: Base::new(LogType::Done, sequence, pair, SystemTime::now()),
+            base: Base::new(LogType::Done, sequence, SystemTime::now()),
             order_id,
             price,
             remaining_size,
@@ -134,9 +132,9 @@ pub struct MatchLog {
 }
 
 impl MatchLog {
-    pub fn new(sequence: i64, pair: String, taker_order_id: String, maker_order_id: String, price: Decimal, size: Decimal) -> Self {
+    pub fn new(sequence: i64, taker_order_id: String, maker_order_id: String, price: Decimal, size: Decimal) -> Self {
         MatchLog {
-            base: Base::new(LogType::Match, sequence, pair, SystemTime::now()),
+            base: Base::new(LogType::Match, sequence, SystemTime::now()),
             taker_order_id,
             maker_order_id,
             side: String::from(""),

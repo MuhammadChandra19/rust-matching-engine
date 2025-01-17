@@ -58,7 +58,6 @@ impl Limit {
         self.orders.push(order.clone());  // Adding the order to the list.
         OpenLog::new(
             order.next_log_seq(),  // Sequence number for the log.
-            "PAIR".to_string(),     // Log type.
             order.id,              // Order ID.
             order.size,            // Order size.
             order.price,           // Order price.
@@ -85,7 +84,6 @@ impl Limit {
 
         DoneLog::new(
             order.next_log_seq(),  // Sequence number for the log.
-            "PAIR".to_string(),     // Log type.
             id,                     // The ID of the deleted order.
             order.price,            // The price of the deleted order.
             order.size,             // The size of the deleted order.
@@ -128,7 +126,6 @@ impl Limit {
             logs.push(Box::new(
                 MatchLog::new(
                     limit_order.next_log_seq(),
-                    "PAIR".to_string(),
                     market_order.clone().id,
                     limit_order.clone().id,
                     limit_order.price,
@@ -157,7 +154,6 @@ impl Limit {
             logs.push(Box::new(
                 DoneLog::new(
                     0,
-                    "PAIR".to_string(),
                     order_ref.id.clone(),
                     order_ref.price,
                     dec!(0),
