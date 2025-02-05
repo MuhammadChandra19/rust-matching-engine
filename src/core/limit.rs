@@ -1,19 +1,19 @@
 #![allow(dead_code)]
 
-use rust_decimal::Decimal;
-use rust_decimal_macros::dec;
 use crate::core::log::{DoneLog, Log, MatchLog, OpenLog};
 use crate::core::order::Order;
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 
 /// A struct representing a limit order, which consists of a price and a list of associated orders.
 ///
 /// The `Limit` struct is used to manage a collection of orders that share the same price. It provides
 /// functionality to add new orders, delete existing ones, and compute the total volume of orders at
 /// this price level.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Limit {
-    pub(crate) price: Decimal,        // The price for this limit order.
-    pub(crate) orders: Vec<Order>,    // A list of orders associated with this limit price.
+    pub(crate) price: Decimal,     // The price for this limit order.
+    pub(crate) orders: Vec<Order>, // A list of orders associated with this limit price.
 }
 
 impl Limit {
@@ -40,9 +40,9 @@ impl Limit {
     fn total_volume(&self) -> Decimal {
         self.orders
             .iter()
-            .map(|order| order.size)  // Summing the size of each order.
-            .reduce(|a, b| a + b)    // Reducing the sizes to get the total volume.
-            .unwrap()                 // This will panic if the list is empty.
+            .map(|order| order.size) // Summing the size of each order.
+            .reduce(|a, b| a + b) // Reducing the sizes to get the total volume.
+            .unwrap() // This will panic if the list is empty.
     }
 
     /// Adds a new order to the limit order book and generates an `OpenLog` entry.
@@ -51,17 +51,18 @@ impl Limit {
     ///
     /// # Arguments
     /// * `order` - An `Order` object to be added to the limit order book.
+    /// * `sequence` - An `i64`
     ///
     /// # Returns
     /// * An `OpenLog` representing the addition of the order.
-    pub(crate) fn add_order(&mut self, mut order: Order) -> OpenLog {
-        self.orders.push(order.clone());  // Adding the order to the list.
+    pub(crate) fn add_order(&mut self, order: Order, sequence: i64) -> OpenLog {
+        self.orders.push(order.clone());
         OpenLog::new(
-            order.next_log_seq(),  // Sequence number for the log.
-            order.id,              // Order ID.
-            order.size,            // Order size.
-            order.price,           // Order price.
-            order.bid_or_ask       // Order type (bid or ask).
+            sequence, // Use the sequence from OrderBook
+            order.id,
+            order.size,
+            order.price,
+            order.bid_or_ask,
         )
     }
 
@@ -72,23 +73,26 @@ impl Limit {
     ///
     /// # Arguments
     /// * `id` - A `String` representing the ID of the order to be deleted.
+    /// * `sequence` - An `i64`
     ///
     /// # Returns
     /// * A `DoneLog` representing the deletion of the order.
-    pub(crate) fn delete_order(&mut self, id: String) -> DoneLog {
-        let mut order = self.orders.iter()
-            .find(|&order| order.id == id)  // Find the order by its ID.
-            .unwrap()                        // Will panic if no matching order is found.
+    pub(crate) fn delete_order(&mut self, id: String, sequence: i64) -> DoneLog {
+        let order = self
+            .orders
+            .iter()
+            .find(|&order| order.id == id) // Find the order by its ID.
+            .unwrap() // Will panic if no matching order is found.
             .clone();
-        self.orders.retain(|order| order.id != id);  // Remove the order from the list.
+        self.orders.retain(|order| order.id != id); // Remove the order from the list.
 
         DoneLog::new(
-            order.next_log_seq(),  // Sequence number for the log.
-            id,                     // The ID of the deleted order.
-            order.price,            // The price of the deleted order.
-            order.size,             // The size of the deleted order.
-            "DELETED".to_string(),  // Status indicating the order was deleted.
-            order.bid_or_ask       // The type of the deleted order (bid or ask).
+            sequence,              // Sequence number for the log.
+            id,                    // The ID of the deleted order.
+            order.price,           // The price of the deleted order.
+            order.size,            // The size of the deleted order.
+            "DELETED".to_string(), // Status indicating the order was deleted.
+            order.bid_or_ask,      // The type of the deleted order (bid or ask).
         )
     }
 
@@ -107,6 +111,7 @@ impl Limit {
     ///
     /// # Arguments
     /// * `market_order` - A mutable reference to the market `Order` to be filled.
+    /// * `sequence` - An `i64`
     ///
     /// # Returns
     /// * A `Vec<dyn Log>` containing logs of matches and filleds orders.
@@ -119,29 +124,30 @@ impl Limit {
     /// # Logs
     /// * `MatchLog` is generated when a match occurs between a market order and a limit order.
     /// * `DoneLog` is generated for orders that remain in the order book after processing.
-    pub(crate) fn fill_order(&mut self, market_order: &mut Order) -> Vec<Box<dyn Log>> {
+    pub(crate) fn fill_order(
+        &mut self,
+        market_order: &mut Order,
+        sequence: i64,
+    ) -> Vec<Box<dyn Log>> {
         let mut logs: Vec<Box<dyn Log>> = vec![];
         let mut remove_indices = Vec::new();
-        for (idx, limit_order)  in self.orders.iter_mut().enumerate() {
-            logs.push(Box::new(
-                MatchLog::new(
-                    limit_order.next_log_seq(),
-                    market_order.clone().id,
-                    limit_order.clone().id,
-                    limit_order.price,
-                    market_order.size
-                ))
-            );
+        for (idx, limit_order) in self.orders.iter_mut().enumerate() {
+            logs.push(Box::new(MatchLog::new(
+                sequence,
+                market_order.clone().id,
+                limit_order.clone().id,
+                limit_order.price,
+                market_order.size,
+            )));
             match market_order.size >= limit_order.size {
                 true => {
                     market_order.size -= limit_order.size;
 
-
-                    limit_order.size = dec!(0);  // Fully filled limit order.
+                    limit_order.size = dec!(0); // Fully filled limit order.
                 }
                 false => {
                     limit_order.size -= market_order.size;
-                    market_order.size = dec!(0);  // Fully filled market order.
+                    market_order.size = dec!(0); // Fully filled market order.
                 }
             }
             if limit_order.is_filled() {
@@ -151,22 +157,18 @@ impl Limit {
 
         for index in remove_indices.iter().rev() {
             let order_ref: &Order = &self.orders[*index];
-            logs.push(Box::new(
-                DoneLog::new(
-                    0,
-                    order_ref.id.clone(),
-                    order_ref.price,
-                    dec!(0),
-                    "FILLED".to_string(),
-                    order_ref.bid_or_ask.clone()
-                )
-            ));
+            logs.push(Box::new(DoneLog::new(
+                sequence,
+                order_ref.id.clone(),
+                order_ref.price,
+                dec!(0),
+                "FILLED".to_string(),
+                order_ref.bid_or_ask.clone(),
+            )));
 
             self.orders.remove(*index);
-
         }
 
         logs
     }
-
 }

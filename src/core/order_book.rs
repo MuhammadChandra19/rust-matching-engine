@@ -1,8 +1,9 @@
-use std::collections::HashMap;
-use rust_decimal::Decimal;
 use crate::core::limit::Limit;
 use crate::core::log::{Log, OpenLog};
 use crate::core::order::{BidOrAsk, Order};
+use crate::core::snapshot::{Snapshot, SnapshotData};
+use rust_decimal::Decimal;
+use std::collections::HashMap;
 
 /// Represents an order book containing bid and ask limits.
 /// The `OrderBook` struct manages buy and sell orders, organized by price levels.
@@ -10,6 +11,7 @@ use crate::core::order::{BidOrAsk, Order};
 pub struct OrderBook {
     pub(crate) asks: HashMap<Decimal, Limit>, // Map of price levels to ask (sell) limits.
     pub(crate) bids: HashMap<Decimal, Limit>, // Map of price levels to bid (buy) limits.
+    sequence: i64,                            // Add sequence counter
 }
 
 impl OrderBook {
@@ -18,7 +20,13 @@ impl OrderBook {
         OrderBook {
             asks: HashMap::new(),
             bids: HashMap::new(),
+            sequence: 0, // Initialize sequence counter
         }
+    }
+
+    fn next_log_seq(&mut self) -> i64 {
+        self.sequence += 1;
+        self.sequence
     }
 
     /// Fills a market order by matching it with the opposing limit orders.
@@ -41,7 +49,8 @@ impl OrderBook {
         // Collect indices of limits to remove
         let mut remove_indices = Vec::new();
         for (index, limit_order) in limits.iter_mut().enumerate() {
-            let result = limit_order.fill_order(market_order);
+            let sequence = self.next_log_seq();
+            let result = limit_order.fill_order(market_order, sequence);
 
             if limit_order.orders.is_empty() {
                 remove_indices.push(index);
@@ -69,8 +78,8 @@ impl OrderBook {
     ///
     /// # Returns
     /// * A vector of mutable references to `Limit` sorted by price.
-    pub fn ask_limits(&mut self) -> Vec<&mut Limit> {
-        let mut limits = self.asks.values_mut().collect::<Vec<&mut Limit>>();
+    pub fn ask_limits(&self) -> Vec<Limit> {
+        let mut limits = self.asks.values().cloned().collect::<Vec<Limit>>();
         limits.sort_by(|a, b| a.price.cmp(&b.price));
         limits
     }
@@ -82,8 +91,8 @@ impl OrderBook {
     ///
     /// # Returns
     /// * A vector of mutable references to `Limit` sorted by price.
-    pub fn bid_limits(&mut self) -> Vec<&mut Limit> {
-        let mut limits = self.bids.values_mut().collect::<Vec<&mut Limit>>();
+    pub fn bid_limits(&self) -> Vec<Limit> {
+        let mut limits = self.bids.values().cloned().collect::<Vec<Limit>>();
         limits.sort_by(|a, b| b.price.cmp(&a.price));
         limits
     }
@@ -100,38 +109,43 @@ impl OrderBook {
     ///
     /// # Returns
     /// * An `OpenLog` containing information about the added limit order.
-    pub fn add_limit_order(&mut self, price: Decimal, mut order: Order) -> OpenLog {
-        let log = OpenLog::new(
-            order.next_log_seq(),
-            order.id.clone(),
-            order.size,
-            price,
-            order.bid_or_ask.clone(),
-        );
-
+    pub fn add_limit_order(&mut self, price: Decimal, order: Order) -> OpenLog {
+        let sequence = self.next_log_seq();
         match order.bid_or_ask {
             BidOrAsk::Bid => match self.bids.get_mut(&price) {
                 Some(limit) => {
-                    limit.add_order(order); // Append order to existing bid limit.
+                    limit.add_order(order, sequence) // Append order to existing bid limit.
                 }
                 None => {
                     let mut limit = Limit::new(price);
-                    limit.add_order(order); // Create a new bid limit.
+                    let log = limit.add_order(order, sequence); // Create a new bid limit.
                     self.bids.insert(price, limit);
+                    log
                 }
             },
             BidOrAsk::Ask => match self.asks.get_mut(&price) {
                 Some(limit) => {
-                    limit.add_order(order); // Append order to existing ask limit.
+                    limit.add_order(order, sequence) // Append order to existing ask limit.
                 }
                 None => {
                     let mut limit = Limit::new(price);
-                    limit.add_order(order); // Create a new ask limit.
+                    let log = limit.add_order(order, sequence); // Create a new ask limit.
                     self.asks.insert(price, limit);
+                    log
                 }
             },
         }
+    }
 
-        log
+    pub fn restore(&mut self, snapshot: SnapshotData) {
+        for order in snapshot.orders {
+            self.add_limit_order(order.price.clone(), order);
+        }
+    }
+
+    pub fn snapshot(self, pair: String) -> SnapshotData {
+        let snapshot = Snapshot::new(pair);
+
+        snapshot.construct_snapshot(self.ask_limits(), self.bid_limits(), 0, 0)
     }
 }

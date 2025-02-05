@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-use std::time::SystemTime;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
 pub enum BidOrAsk {
@@ -14,9 +14,8 @@ pub struct Order {
     pub(crate) id: String,
     pub(crate) price: Decimal,
     pub size: Decimal,
-    sequence: i64,
     pub(crate) bid_or_ask: BidOrAsk,
-    created_at: SystemTime
+    created_at: SystemTime,
 }
 
 impl Order {
@@ -27,16 +26,10 @@ impl Order {
             price,
             size,
             created_at: SystemTime::now(),
-            sequence: 0
         }
     }
 
     pub fn is_filled(&self) -> bool {
         self.size == dec!(0)
-    }
-
-    pub fn next_log_seq(&mut self) -> i64 {
-        self.sequence += 1;
-        self.sequence
     }
 }
